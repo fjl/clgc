@@ -1,0 +1,6 @@
+[submodule "lib/cl-cairo2"]
+	path = lib/cl-cairo2
+	url = git://github.com/tpapp/cl-cairo2.git
+[submodule "lib/squirl"]
+	path = lib/squirl
+	url = git://github.com/sykopomp/squirl.git

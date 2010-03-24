@@ -1,0 +1,1 @@
+/home/fjl/lisp/pong/lib/trivial-garbage_0.18/trivial-garbage.asd

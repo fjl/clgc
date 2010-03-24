@@ -1,0 +1,1 @@
+../squirl/squirl.asd

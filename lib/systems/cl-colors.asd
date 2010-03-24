@@ -1,0 +1,1 @@
+/home/fjl/lisp/pong/lib/tpapp-cl-colors-1dd94ba/cl-colors.asd
