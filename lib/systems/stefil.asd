@@ -1,1 +1,1 @@
-/home/fjl/lisp/pong/lib/stefil/stefil.asd
+../stefil/stefil.asd

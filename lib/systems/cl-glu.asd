@@ -1,1 +1,1 @@
-/home/fjl/lisp/pong/lib/cl-opengl/cl-glu.asd
+../cl-opengl/cl-glu.asd

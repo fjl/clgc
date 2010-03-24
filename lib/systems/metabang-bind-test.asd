@@ -1,1 +1,1 @@
-/home/fjl/lisp/pong/lib/metabang-bind/metabang-bind-test.asd
+../metabang-bind/metabang-bind-test.asd

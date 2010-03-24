@@ -1,1 +1,1 @@
-/home/fjl/lisp/pong/lib/rt-20040621/rt.asd
+../rt-20040621/rt.asd

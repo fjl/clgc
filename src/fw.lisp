@@ -1,6 +1,6 @@
 (in-package :pong)
 
-(defclass game-object (squirl:body)
+(defclass game-object ()
   ((pos-x :initarg :pos-x :initform 0 :reader pos-x)
    (pos-y :initarg :pos-y :initform 0 :reader pos-y)
    (width :initarg :width ::reader width)

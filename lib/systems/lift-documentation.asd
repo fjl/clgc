@@ -1,1 +1,1 @@
-/home/fjl/lisp/pong/lib/lift/lift-documentation.asd
+../lift/lift-documentation.asd

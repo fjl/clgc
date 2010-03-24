@@ -1,1 +1,1 @@
-/home/fjl/lisp/pong/lib/cffi_0.10.5/cffi-uffi-compat.asd
+../cffi_0.10.5/cffi-uffi-compat.asd
