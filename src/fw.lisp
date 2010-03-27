@@ -1,35 +1,38 @@
 (in-package :pong)
 
 (defclass game-object ()
-  ((pos-x :initarg :pos-x :initform 0 :reader pos-x)
-   (pos-y :initarg :pos-y :initform 0 :reader pos-y)
-   (width :initarg :width ::reader width)
-   (height :initarg :height :reader height)
-   (rotation :initarg :rotation :initform 0 :accessor rotation)
-   phy-body))
+  ((width :reader width)
+   (height :reader height)
+   (phy-body :initform nil :reader physics-body)))
 
 (defclass game (glut:window)
   ((objects :initform nil :reader game-objects)
    (framerate :initform 60 :initarg :framerate :reader game-framerate)
-   phy-world)
+   (phy-world :initform nil :reader physics-world))
   (:default-initargs :mode '(:rgba :double :alpha)))
 
 ;; window ------------------------------------------------     
-(defmethod initialize-instance ((self game) &rest initargs &key &allow-other-keys)
+(defmethod initialize-instance :before ((self game) &rest initargs 
+                                        &key (gravity (squirl:vec 0 9.81)) 
+                                             (damping 1d0)
+                                             (physics-accuracy 3)
+                                        &allow-other-keys)
   (declare (ignore initargs))
-  (call-next-method))
+  (let ((world (squirl:make-world :gravity gravity :damping (coerce damping 'double-float)
+                                  :iterations physics-accuracy :elastic-iterations 5)))
+    (setf (slot-value self 'phy-world) world)))
 
 (defgeneric initial-objects (game)
-  (:documentation "Make a list of objects that are visible when the game starts."))
-(defmethod initial-objects ((self game)) nil)
+  (:documentation "Make a list of objects that are visible when the game starts.")
+  (:method ((g game)) nil))
 
 (defgeneric update (game)
-  (:documentation "Update the game. Called on very frame"))
-(defmethod update ((game game)))
+  (:documentation "Update the game. Called on very frame")
+  (:method ((g game))))
 
 (defgeneric key-down (game key)
-  (:documentation "Called whenever a key is pressed"))
-(defmethod key-down ((game game) key))
+  (:documentation "Called whenever a key is pressed")
+  (:method ((g game) key)))
 
 (defmethod glut:keyboard ((game game) key x y)
   (key-down game key))
@@ -54,7 +57,7 @@
   (gl:viewport 0 0 width height)
   (gl:matrix-mode :projection)
   (gl:load-identity)
-  (glu:ortho-2d 0 width height 0))
+  (glu:ortho-2d 0 width 0 height))
 
 (defmethod glut:display ((self game))
   (with-slots (objects) self
@@ -64,45 +67,78 @@
 
 (defmethod glut:tick ((self game))
   (glut:post-redisplay)
+  (squirl:world-step (physics-world self) (/ (game-framerate self)))
   (update self))
 
 (defmethod add-object ((self game) (obj game-object))
   (format t "game: adding object ~a~%" obj)
   (with-slots (objects) self
     (added-to-game obj self)
+    (squirl:world-add-body (physics-world self) (physics-body obj))
     (setf objects (cons obj objects))))
 
 (defmethod glut:close :after ((self game))
   (setf glut::*glut-initialized-p* nil))
 
 ;; object -----------------------------------------------------
+(defmethod initialize-instance :before ((obj game-object) &rest initargs &key 
+                                        (width nil) (height nil) ; no defaults
+                                        (mass 0) (inertia nil)
+                                        (calculate-inertia-p (not inertia)) (pos-x 0) (pos-y 0) &allow-other-keys)
+  (declare (ignore initargs))
+  (or width height (error "game-object: need initial width and height"))
+  (setf (slot-value obj 'width) width)
+  (setf (slot-value obj 'height) height)
+  (let ((body (squirl:make-body :mass mass :inertia (or inertia most-positive-double-float)
+                                :calculate-inertia-p calculate-inertia-p 
+                                :position (squirl:vec pos-x pos-y)
+                                :actor obj)))
+    (setf (slot-value obj 'phy-body) body)
+    (squirl:attach-shapes (collision-hull obj) body)))
+
+(defgeneric collision-hull (object)
+  (:documentation "Make a list of shapes that define the collision hull of an object")
+  (:method ((obj game-object)) nil))
+
 (defgeneric added-to-game (obj game)
-  (:documentation "Notify a game object that it has been added to a game"))
+  (:documentation "Notify a game object that it has been added to a game")
+  (:method ((obj game-object) (game game)))) 
 
 (defgeneric removed-from-game (obj game)
-  (:documentation "Notify a game object that it has been removed from a game"))
+  (:documentation "Notify a game object that it has been removed from a game")
+  (:method ((obj game-object) (game game))))
 
 (defgeneric draw-gl (game-obj)
-  (:documentation "Draw a game object into an OpenGL context."))
+  (:documentation "Draw a game object into an OpenGL context.")
+  (:method ((obj game-object))))
    
 (defmethod resize ((obj game-object) new-width new-height)
   (format t "game-object ~a: resize to (~a, ~a)~%" obj new-width new-height)
   (setf (slot-value obj 'width) new-width)
-  (setf (slot-value obj 'height) new-height))
+  (setf (slot-value obj 'height) new-height)
+  (let ((body (physics-body obj)))
+    (mapc (lambda (s) (squirl:detach-shape s body)) (squirl:body-shapes body))
+    (squirl:attach-shapes (collision-hull obj) body)))
 
 (defmethod (setf width) (new-width (obj game-object))
   (resize obj new-width (height obj)))
 (defmethod (setf height) (new-height (obj game-object))
   (resize obj (width obj) new-height))
 
-(defmethod move ((obj game-object) new-x new-y)
-  (setf (slot-value obj 'pos-x) new-x)
-  (setf (slot-value obj 'pos-y) new-y))
+(defmethod pos-x ((obj game-object))
+  (squirl:vec-x (squirl:body-position (physics-body obj))))
+(defmethod pos-y ((obj game-object))
+  (squirl:vec-y (squirl:body-position (physics-body obj))))
 
-(defmethod (setf pos-x) (new-x (obj game-object))
-  (move obj new-x (pos-y obj)))
-(defmethod (setf pos-y) (new-y (obj game-object))
-  (move obj (pos-x obj) new-y))
+(defmethod rotation ((obj game-object))
+  (* (/ 180 pi) (squirl:vec->angle (squirl:body-rotation (physics-body obj)))))
+
+(defmethod (setf rotation) (angle (obj game-object))
+  (setf (squirl:body-rotation (physics-body obj)) (squirl:angle->vec (/ angle (/ 180 pi)))))
+
+(defmethod squirl:collide :before ((obj1 t) (obj2 t) (arb t))
+;  (format t "COLLISION: ~a, ~a, ~a~%" obj1 obj2 arb))
+)
 
 ;; cairo -----------------------------------------------------------
 (defclass cairo-game-object (game-object)
@@ -133,7 +169,7 @@
     (if gl-texture-id
         (gl:delete-textures (list gl-texture-id)))
     (setf (slot-value obj 'gl-texture-id) (car (gl:gen-textures 1)))))
-      
+
 (defmethod added-to-game ((obj cairo-game-object) (game game))
   (declare (ignore game))
   (init-cairo-surface obj)
@@ -155,9 +191,8 @@
                        :unsigned-byte (cairo:image-surface-get-data (cairo-surface obj) :pointer-only t))
       (gl:matrix-mode :modelview)
       (gl:with-pushed-matrix
-        (gl:load-identity)
-        (gl:rotate (rotation obj) 0 0 1)
         (gl:translate (pos-x obj) (pos-y obj) 0)
+        (gl:rotate (rotation obj) 0 0 1)
         (gl:scale (width obj) (height obj) 1)
         (gl:with-primitive :quads
           (gl:tex-coord 0 0)
@@ -176,6 +211,9 @@
  (format t "cairo-game-object ~a: redraw~%" obj)
   (cairo:with-context ((slot-value obj 'cairo-context))
     (cairo:save)
+    (cairo:set-source-rgba 0 0 0 0)
+    (cairo:paint)
     (if (slot-value obj 'prescale) (cairo:scale (width obj) (height obj)))
     (call-next-method)
     (cairo:restore)))
+

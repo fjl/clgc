@@ -14,7 +14,7 @@
 
 (defsystem "pong"
   :description "A simple pong game"
-  :depends-on (:cl-cairo2 :cl-opengl :cl-glut :cl-glu :squirl)
+  :depends-on (:cl-cairo2 :cl-opengl :cl-glut :cl-glu :squirl) 
   :pathname *project-dir*
   :components ((:module "src"
                         :components ((:file "package")
