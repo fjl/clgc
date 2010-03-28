@@ -15,11 +15,12 @@
 (defmethod initialize-instance :before ((self game) &rest initargs 
                                         &key (gravity (squirl:vec 0 9.81)) 
                                              (damping 1d0)
-                                             (physics-accuracy 3)
+                                             (physics-accuracy 2)
+                                             (physics-elastic-accuracy 2)
                                         &allow-other-keys)
   (declare (ignore initargs))
   (let ((world (squirl:make-world :gravity gravity :damping (coerce damping 'double-float)
-                                  :iterations physics-accuracy :elastic-iterations 5)))
+                                  :iterations physics-accuracy :elastic-iterations physics-elastic-accuracy)))
     (setf (slot-value self 'phy-world) world)))
 
 (defgeneric initial-objects (game)
@@ -34,10 +35,19 @@
   (:documentation "Called whenever a key is pressed")
   (:method ((g game) key)))
 
+(defgeneric key-up (game key)
+  (:documentation "Called whenever a key is released")
+  (:method ((g game) key)))
+
 (defmethod glut:keyboard ((game game) key x y)
   (key-down game key))
 (defmethod glut:special ((game game) key x y)
   (key-down game key))
+
+(defmethod glut:keyboard-up ((game game) key x y)
+  (key-up game key))
+(defmethod glut:special-up ((game game) key x y)
+  (key-up game key))
 
 (defmethod glut:display-window :before ((self game))
   (gl:clear-color 0 0 0 0)
@@ -47,7 +57,9 @@
   (gl:enable :texture-rectangle-arb)
   (glut:enable-tick self (round (* 1000 (/ 1 (game-framerate self)))))
   (glut:enable-event self :special)
+  (glut:enable-event self :special-up)
   (glut:enable-event self :keyboard)
+  (glut:enable-event self :keyboard-up)
   (glut:reshape self (glut:width self) (glut:height self))
   (format t "game: gl init done, adding objects~%")
   (mapc (lambda (obj) (add-object self obj)) (initial-objects self)))
@@ -78,14 +90,14 @@
     (setf objects (cons obj objects))))
 
 (defmethod glut:close :after ((self game))
-  (mapc (lambda (obj) (removed-from-game obj self)) (game-objects self))
-  (setf glut::*glut-initialized-p* nil))
+  (mapc (lambda (obj) (removed-from-game obj self)) (game-objects self)))
 
 ;; object -----------------------------------------------------
-(defmethod initialize-instance :before ((obj game-object) &rest initargs &key 
+(defmethod initialize-instance :around ((obj game-object) &rest initargs &key 
                                         (width nil) (height nil) ; no defaults
                                         (mass 0) (inertia nil)
                                         (rotation 0)
+                                        (velocity squirl:+zero-vector+)
                                         (calculate-inertia-p (not inertia)) 
                                         (pos-x 0) (pos-y 0) &allow-other-keys)
   (declare (ignore initargs))
@@ -96,13 +108,22 @@
                                 :calculate-inertia-p calculate-inertia-p 
                                 :position (squirl:vec (+ pos-x (/ width 2)) (+ pos-y (/ height 2)))
                                 :angle (/ rotation (/ 180 pi))
+                                :velocity velocity
                                 :actor obj)))
     (setf (slot-value obj 'phy-body) body)
+    (call-next-method)
     (squirl:attach-shapes (collision-hull obj) body)))
 
 (defgeneric collision-hull (object)
   (:documentation "Make a list of shapes that define the collision hull of an object")
   (:method ((obj game-object)) nil))
+
+(defgeneric collide (obj1 obj2 arbiter)
+  (:documentation "Decide, whether two objects should collide. Called whenever a collision is detected")
+  (:method ((obj1 game-object) (obj2 game-object) arb) t))
+
+(defmethod squirl:collide ((obj1 game-object) (obj2 game-object) arb)
+  (collide obj1 obj2 arb))
 
 (defgeneric added-to-game (obj game)
   (:documentation "Notify a game object that it has been added to a game")
@@ -150,20 +171,22 @@
 
 (defmethod center-x ((obj game-object))
   (squirl:vec-x (squirl:body-position (physics-body obj))))
-
 (defmethod center-y ((obj game-object))
   (squirl:vec-y (squirl:body-position (physics-body obj))))
 
+(defmethod move ((obj game-object) new-x new-y)
+  (squirl:body-slew (physics-body obj) (squirl:vec (- new-x (/ (width obj) 2)) (- new-y (/ (height obj) 2))) 1d0))
+
 (defmethod rotation ((obj game-object))
-  (* (/ 180 pi) (squirl:vec->angle (squirl:body-rotation (physics-body obj)))))
+  (rad->deg (squirl:body-angle (physics-body obj))))
 
-(defmethod (setf rotation) (angle (obj game-object))
-  (setf (squirl:body-rotation (physics-body obj)) (squirl:angle->vec (/ angle (/ 180 pi)))))
-
-(defmethod squirl:collide :before ((obj1 t) (obj2 t) (arb t))
-;  (format t "COLLISION: ~a, ~a, ~a~%" obj1 obj2 arb))
-  t
-)
+;; convenience
+(defun deg->rad (deg) (/ deg (/ 180 pi)))
+(defun rad->deg (rad) (* rad (/ 180 pi)))
+(defun angle->vec (ang)
+  (squirl:angle->vec (deg->rad ang)))
+(defun vec->angle (vec)
+  (rad->deg (squirl:vec->angle vec)))
 
 ;; cairo -----------------------------------------------------------
 (defclass cairo-game-object (game-object)
