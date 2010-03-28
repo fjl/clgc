@@ -78,6 +78,7 @@
     (setf objects (cons obj objects))))
 
 (defmethod glut:close :after ((self game))
+  (mapc (lambda (obj) (removed-from-game obj self)) (game-objects self))
   (setf glut::*glut-initialized-p* nil))
 
 ;; object -----------------------------------------------------
@@ -202,8 +203,10 @@
 
 (defmethod removed-from-game ((obj cairo-game-object) (game game))
   (declare (ignore game))
-  (with-slots (gl-texture-id) obj
+  (with-slots (gl-texture-id cairo-surface cairo-context) obj
     (when gl-texture-id
+      (cairo:destroy cairo-context)
+      (cairo:destroy cairo-surface)
       (gl:delete-textures (list gl-texture-id))
       (setf gl-texture-id nil))))
 
