@@ -169,6 +169,7 @@
   ((gl-texture-id :initform nil :reader gl-texture-id)
    (cairo-surface :initform nil :reader cairo-surface)
    (cairo-context :initform nil :reader cairo-context)
+   (margin :initform 3 :initarg :margin)
    (prescale :initform t :initarg :prescale :documentation 
              "Whether drawing should happen in a normalized coordinate system."))
   (:documentation "A game object that is drawn by cairo. Subclasses should override the 'redraw' method."))
@@ -185,10 +186,10 @@
     (redraw obj)))
 
 (defmethod init-cairo-surface ((obj cairo-game-object))
-  (with-slots (gl-texture-id cairo-surface cairo-context) obj
+  (with-slots (gl-texture-id cairo-surface cairo-context margin) obj
     (if cairo-surface (cairo:destroy cairo-surface))
     (if cairo-context (cairo:destroy cairo-context))
-    (setf cairo-surface (cairo:create-image-surface :argb32 (width obj) (height obj)))
+    (setf cairo-surface (cairo:create-image-surface :argb32 (+ (* 2 margin) (width obj)) (+ (* 2 margin) (height obj))))
     (setf cairo-context (cairo:create-context cairo-surface))
     (if gl-texture-id
         (gl:delete-textures (list gl-texture-id)))
@@ -207,37 +208,41 @@
       (setf gl-texture-id nil))))
 
 (defmethod draw-gl ((obj cairo-game-object))
-  (let ((w (width obj))
-        (h (height obj)))
-    (with-slots (gl-texture-id) obj
+  (with-slots (gl-texture-id margin) obj
+    (let ((w (+ (* 2 margin) (width obj)))
+          (h (+ (* 2 margin) (height obj))))
       (when gl-texture-id
-        (gl:enable :line-smooth)
-        (gl:bind-texture :texture-rectangle-arb gl-texture-id)
-        (gl:tex-image-2d :texture-rectangle-arb 0 :rgba
-                         w h 0 :bgra
-                         :unsigned-byte (cairo:image-surface-get-data (cairo-surface obj) :pointer-only t))
-        (gl:with-primitive :quads
-          (gl:tex-coord 0 0)
-          (gl:vertex 0 0)
-          (gl:tex-coord w 0)
-          (gl:vertex w 0)
-          (gl:tex-coord w h)
-          (gl:vertex w h)
-          (gl:tex-coord 0 h)
-          (gl:vertex 0 h))))))
+        (gl:with-pushed-matrix 
+          (gl:translate (- margin) (- margin) 0)
+          (gl:enable :line-smooth)
+          (gl:bind-texture :texture-rectangle-arb gl-texture-id)
+          (gl:tex-image-2d :texture-rectangle-arb 0 :rgba
+                           w h 0 :bgra
+                           :unsigned-byte (cairo:image-surface-get-data (cairo-surface obj) :pointer-only t))
+          (gl:with-primitive :quads
+            (gl:tex-coord 0 0)
+            (gl:vertex 0 0)
+            (gl:tex-coord w 0)
+            (gl:vertex w 0)
+            (gl:tex-coord w h)
+            (gl:vertex w h)
+            (gl:tex-coord 0 h)
+            (gl:vertex 0 h)))))))
 
 (defgeneric redraw (game-object)
   (:documentation "Draw the contents of a game object"))
 
 (defmethod redraw :around ((obj cairo-game-object))
- (format t "cairo-game-object ~a: redraw~%" obj)
-  (cairo:with-context ((slot-value obj 'cairo-context))
-    (cairo:save)
-    (cairo:set-source-rgba 0 0 0 0)
-    (cairo:set-operator :source)
-    (cairo:paint)
-    (cairo:restore)
-    (cairo:save)
-    (if (slot-value obj 'prescale) (cairo:scale (width obj) (height obj)))
-    (call-next-method)
-    (cairo:restore)))
+  (with-slots (margin) obj
+    (format t "cairo-game-object ~a: redraw~%" obj)
+    (cairo:with-context ((slot-value obj 'cairo-context))
+      (cairo:save)
+      (cairo:set-source-rgba 0 0 0 0)
+      (cairo:set-operator :source)
+      (cairo:paint)
+      (cairo:restore)
+      (cairo:save)
+      (cairo:translate margin margin)
+      (if (slot-value obj 'prescale) (cairo:scale (width obj) (height obj)))
+      (call-next-method)
+      (cairo:restore))))

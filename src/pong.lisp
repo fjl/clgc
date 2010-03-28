@@ -5,7 +5,10 @@
   (glut:display-window (make-instance 'pong)))
 
 (defclass paddle (cairo-game-object) ()
-  (:default-initargs :width 20 :height 100 :prescale nil :mass 0))
+  (:default-initargs :width 20 :height 100 :prescale nil :mass 4))
+
+(defmethod collision-hull ((obj paddle))
+  (list (squirl:make-rectangle (width obj) (height obj) :friction 0.1 :restitution 0.1)))
 
 (defmethod redraw ((obj paddle))
   (cairo:set-source-rgba 1 1 1 1)
@@ -27,7 +30,7 @@
 (defclass ball (cairo-game-object)
   ((dx :initform 5)
    (dy :initform 5))
-  (:default-initargs :width 40 :height 40 :mass 4))
+  (:default-initargs :width 40 :height 40 :mass 1))
 
 (defmethod collision-hull ((obj ball))
   (list 
@@ -39,7 +42,7 @@
   (cairo:set-source-rgb 1 1 1)
   (cairo:arc 0.5 0.5 0.5 0 (cairo:deg-to-rad 360))
   (cairo:fill-path)
-  (cairo:set-line-width 0.2)
+  (cairo:set-line-width 0.05)
   (cairo:move-to 0.2 0.2)
   (cairo:line-to 0.8 0.8)
   (cairo:move-to 0.2 0.8)
@@ -49,7 +52,7 @@
 )
 
 (defclass playfield (cairo-game-object) ()
-  (:default-initargs :width 500 :height 500))
+  (:default-initargs :width 500 :height 500 :margin 10))
 
 (defmethod collision-hull ((obj playfield))
   (let* ((w (width obj))
@@ -57,36 +60,34 @@
          (w/2 (/ w 2))
          (h/2 (/ h 2)))
   (list 
-     (squirl:make-segment (squirl:vec (- w/2) (- h/2)) (squirl:vec w/2 (- h/2))     :friction 1 :restitution 1 :radius 13)
-     (squirl:make-segment (squirl:vec w/2 (- h/2))     (squirl:vec w/2 h/2)         :friction 1 :restitution 1 :radius 13)
-     (squirl:make-segment (squirl:vec w/2 h/2)         (squirl:vec (- w/2) h/2)     :friction 1 :restitution 1 :radius 13)
-     (squirl:make-segment (squirl:vec (- w/2) h/2)     (squirl:vec (- w/2) (- h/2)) :friction 1 :restitution 1 :radius 13)
+     (squirl:make-segment (squirl:vec (- w/2) (- h/2)) (squirl:vec w/2 (- h/2))     :friction 1 :restitution 1 :radius 8)
+     (squirl:make-segment (squirl:vec w/2 (- h/2))     (squirl:vec w/2 h/2)         :friction 1 :restitution 1 :radius 8)
+     (squirl:make-segment (squirl:vec w/2 h/2)         (squirl:vec (- w/2) h/2)     :friction 1 :restitution 1 :radius 8)
+     (squirl:make-segment (squirl:vec (- w/2) h/2)     (squirl:vec (- w/2) (- h/2)) :friction 1 :restitution 1 :radius 8)
      )))
 
 (defmethod redraw ((obj playfield))
   (cairo:set-source-rgb 1 0 0)
-  (cairo:set-line-width 0.05)
+  (cairo:set-line-width 0.03)
   (cairo:rectangle 0 0 1 1)
   (cairo:stroke))
 
 (defclass pong (game) 
   ((ball :initform (make-instance 'ball :pos-x 300 :pos-y 200))
-   (paddle1 :initform nil)
-   (paddle2 :initform (make-instance 'paddle))
-   (p1-score :initform 0)
-   (p2-score :initform 0))
+   (playfield :initform (make-instance 'playfield :pos-x 20 :pos-y 20 :rotation 5))
+   (paddle :initform (make-instance 'paddle :pos-x 40 :pos-y 40)))
   (:default-initargs :title "pong" :width 800 :height 800 
                      :game-mode nil :framerate 70 :gravity (squirl:vec 0 100)))
 
 (defmethod key-down ((game pong) key)
-  (with-slots (paddle2) game
+  (with-slots (paddle) game
     (case key
-      ((:key-up)   (squirl:body-apply-force (physics-body paddle2) (squirl:vec 0 -3) (squirl:vec 0 0)))
-      ((:key-down) (squirl:body-apply-force (physics-body paddle2) (squirl:vec 0 3) (squirl:vec 0 0))))))
+      ((:key-up)   (squirl:body-apply-force (physics-body paddle) (squirl:vec 0 -3) (squirl:vec 0 0)))
+      ((:key-down) (squirl:body-apply-force (physics-body paddle) (squirl:vec 0 3) (squirl:vec 0 0))))))
 
 (defmethod initial-objects ((game pong))
   (list 
    (slot-value game 'ball)
-;   (slot-value game 'paddle2)
-   (make-instance 'playfield :pos-x 20 :pos-y 20 :rotation 5)
+   (slot-value game 'paddle)
+   (slot-value game 'playfield)
    ))
