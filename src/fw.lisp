@@ -57,7 +57,7 @@
   (gl:viewport 0 0 width height)
   (gl:matrix-mode :projection)
   (gl:load-identity)
-  (glu:ortho-2d 0 width 0 height))
+  (glu:ortho-2d 0 width height 0))
 
 (defmethod glut:display ((self game))
   (with-slots (objects) self
@@ -84,14 +84,17 @@
 (defmethod initialize-instance :before ((obj game-object) &rest initargs &key 
                                         (width nil) (height nil) ; no defaults
                                         (mass 0) (inertia nil)
-                                        (calculate-inertia-p (not inertia)) (pos-x 0) (pos-y 0) &allow-other-keys)
+                                        (rotation 0)
+                                        (calculate-inertia-p (not inertia)) 
+                                        (pos-x 0) (pos-y 0) &allow-other-keys)
   (declare (ignore initargs))
   (or width height (error "game-object: need initial width and height"))
   (setf (slot-value obj 'width) width)
   (setf (slot-value obj 'height) height)
   (let ((body (squirl:make-body :mass mass :inertia (or inertia most-positive-double-float)
                                 :calculate-inertia-p calculate-inertia-p 
-                                :position (squirl:vec pos-x pos-y)
+                                :position (squirl:vec (+ pos-x (/ width 2)) (+ pos-y (/ height 2)))
+                                :angle (/ rotation (/ 180 pi))
                                 :actor obj)))
     (setf (slot-value obj 'phy-body) body)
     (squirl:attach-shapes (collision-hull obj) body)))
@@ -111,6 +114,20 @@
 (defgeneric draw-gl (game-obj)
   (:documentation "Draw a game object into an OpenGL context.")
   (:method ((obj game-object))))
+
+(defmethod draw-gl :around ((obj game-object))
+  (let ((x (pos-x obj))
+        (y (pos-y obj))
+        (w (width obj))
+        (h (height obj)))
+    (gl:matrix-mode :modelview)
+    (gl:with-pushed-matrix
+      (gl:load-identity)
+      (gl:translate x y 0)
+      (gl:translate (/ w 2) (/ h 2) 0)
+      (gl:rotate (rotation obj) 0 0 1)
+      (gl:translate (- (/ w 2)) (- (/ h 2)) 0)
+      (call-next-method))))
    
 (defmethod resize ((obj game-object) new-width new-height)
   (format t "game-object ~a: resize to (~a, ~a)~%" obj new-width new-height)
@@ -126,8 +143,14 @@
   (resize obj (width obj) new-height))
 
 (defmethod pos-x ((obj game-object))
-  (squirl:vec-x (squirl:body-position (physics-body obj))))
+  (- (center-x obj) (/ (width obj) 2)))
 (defmethod pos-y ((obj game-object))
+  (- (center-y obj) (/ (height obj) 2)))
+
+(defmethod center-x ((obj game-object))
+  (squirl:vec-x (squirl:body-position (physics-body obj))))
+
+(defmethod center-y ((obj game-object))
   (squirl:vec-y (squirl:body-position (physics-body obj))))
 
 (defmethod rotation ((obj game-object))
@@ -138,6 +161,7 @@
 
 (defmethod squirl:collide :before ((obj1 t) (obj2 t) (arb t))
 ;  (format t "COLLISION: ~a, ~a, ~a~%" obj1 obj2 arb))
+  t
 )
 
 ;; cairo -----------------------------------------------------------
@@ -183,26 +207,24 @@
       (setf gl-texture-id nil))))
 
 (defmethod draw-gl ((obj cairo-game-object))
-  (with-slots (gl-texture-id) obj
-    (when gl-texture-id
-      (gl:bind-texture :texture-rectangle-arb gl-texture-id)
-      (gl:tex-image-2d :texture-rectangle-arb 0 :rgba 
-                       (width obj) (height obj) 0 :bgra
-                       :unsigned-byte (cairo:image-surface-get-data (cairo-surface obj) :pointer-only t))
-      (gl:matrix-mode :modelview)
-      (gl:with-pushed-matrix
-        (gl:translate (pos-x obj) (pos-y obj) 0)
-        (gl:rotate (rotation obj) 0 0 1)
-        (gl:scale (width obj) (height obj) 1)
+  (let ((w (width obj))
+        (h (height obj)))
+    (with-slots (gl-texture-id) obj
+      (when gl-texture-id
+        (gl:enable :line-smooth)
+        (gl:bind-texture :texture-rectangle-arb gl-texture-id)
+        (gl:tex-image-2d :texture-rectangle-arb 0 :rgba
+                         w h 0 :bgra
+                         :unsigned-byte (cairo:image-surface-get-data (cairo-surface obj) :pointer-only t))
         (gl:with-primitive :quads
           (gl:tex-coord 0 0)
           (gl:vertex 0 0)
-          (gl:tex-coord (width obj) 0)
-          (gl:vertex 1 0)
-          (gl:tex-coord (width obj) (height obj))
-          (gl:vertex 1 1)
-          (gl:tex-coord 0 (height obj))
-          (gl:vertex 0 1))))))
+          (gl:tex-coord w 0)
+          (gl:vertex w 0)
+          (gl:tex-coord w h)
+          (gl:vertex w h)
+          (gl:tex-coord 0 h)
+          (gl:vertex 0 h))))))
 
 (defgeneric redraw (game-object)
   (:documentation "Draw the contents of a game object"))
@@ -212,8 +234,10 @@
   (cairo:with-context ((slot-value obj 'cairo-context))
     (cairo:save)
     (cairo:set-source-rgba 0 0 0 0)
+    (cairo:set-operator :source)
     (cairo:paint)
+    (cairo:restore)
+    (cairo:save)
     (if (slot-value obj 'prescale) (cairo:scale (width obj) (height obj)))
     (call-next-method)
     (cairo:restore)))
-

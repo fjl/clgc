@@ -27,9 +27,13 @@
 (defclass ball (cairo-game-object)
   ((dx :initform 5)
    (dy :initform 5))
-  (:default-initargs :width 40 :height 40 :mass 4 :inertia 20))
+  (:default-initargs :width 40 :height 40 :mass 4))
+
 (defmethod collision-hull ((obj ball))
-(list (squirl:make-circle 20 :center (squirl:vec 20 20) :restitution 0.9 :friction 0.6)))
+  (list 
+   (squirl:make-circle (/ (width obj) 2)
+                       :center (squirl:vec 0 0)
+                       :restitution 1 :friction 0.8)))
 
 (defmethod redraw ((obj ball))
   (cairo:set-source-rgb 1 1 1)
@@ -48,13 +52,15 @@
   (:default-initargs :width 500 :height 500))
 
 (defmethod collision-hull ((obj playfield))
-  (let ((w (width obj))
-        (h (height obj)))
-    (list 
-     (squirl:make-segment (squirl:vec 0 0) (squirl:vec w 0) :friction 1 :restitution 1 :radius 13)
-     (squirl:make-segment (squirl:vec w 0) (squirl:vec w h) :friction 1 :restitution 1 :radius 13)
-     (squirl:make-segment (squirl:vec w h) (squirl:vec 0 h) :friction 1 :restitution 1 :radius 13)
-     (squirl:make-segment (squirl:vec 0 h) (squirl:vec 0 0) :friction 1 :restitution 1 :radius 13)
+  (let* ((w (width obj))
+         (h (height obj))
+         (w/2 (/ w 2))
+         (h/2 (/ h 2)))
+  (list 
+     (squirl:make-segment (squirl:vec (- w/2) (- h/2)) (squirl:vec w/2 (- h/2))     :friction 1 :restitution 1 :radius 13)
+     (squirl:make-segment (squirl:vec w/2 (- h/2))     (squirl:vec w/2 h/2)         :friction 1 :restitution 1 :radius 13)
+     (squirl:make-segment (squirl:vec w/2 h/2)         (squirl:vec (- w/2) h/2)     :friction 1 :restitution 1 :radius 13)
+     (squirl:make-segment (squirl:vec (- w/2) h/2)     (squirl:vec (- w/2) (- h/2)) :friction 1 :restitution 1 :radius 13)
      )))
 
 (defmethod redraw ((obj playfield))
@@ -70,7 +76,7 @@
    (p1-score :initform 0)
    (p2-score :initform 0))
   (:default-initargs :title "pong" :width 800 :height 800 
-                     :game-mode nil :framerate 70 :gravity (squirl:vec 0 -100)))
+                     :game-mode nil :framerate 70 :gravity (squirl:vec 0 100)))
 
 (defmethod key-down ((game pong) key)
   (with-slots (paddle2) game
@@ -82,5 +88,5 @@
   (list 
    (slot-value game 'ball)
 ;   (slot-value game 'paddle2)
-   (make-instance 'playfield :pos-x 10 :pos-y 10)
+   (make-instance 'playfield :pos-x 20 :pos-y 20 :rotation 5)
    ))
