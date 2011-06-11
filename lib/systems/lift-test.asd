@@ -1,1 +1,0 @@
-../lift/lift-test.asd

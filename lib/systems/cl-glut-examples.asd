@@ -1,1 +1,0 @@
-../cl-opengl/cl-glut-examples.asd

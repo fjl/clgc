@@ -1,1 +1,0 @@
-../tpapp-cl-colors-1dd94ba/cl-colors.asd

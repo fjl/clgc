@@ -1,1 +1,0 @@
-../cl-utilities-1.2.4/cl-utilities.asd
